@@ -17,6 +17,19 @@ def scrape_doordash(restaurant_name, address):
             page.goto("https://www.doordash.com", timeout=30000)
             page.wait_for_timeout(4000)
 
+            # try to close login popup by clicking the X button
+            try:
+                close = page.query_selector('button[aria-label="Close"]')
+                if close:
+                    close.click()
+                    page.wait_for_timeout(1000)
+                else:
+                    # click outside the modal to dismiss it
+                    page.mouse.click(10, 10)
+                    page.wait_for_timeout(1000)
+            except:
+                pass
+
             page.click('input[placeholder="Enter delivery address"]')
             page.wait_for_timeout(500)
             page.type('input[placeholder="Enter delivery address"]', address, delay=50)
