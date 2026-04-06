@@ -565,11 +565,14 @@
         (!r.available ? ' is-unavailable'  : '');
 
       if (!r.available) {
+        const msg = r.bot_blocked
+          ? 'Not available in the cloud version — DoorDash blocks automated access from server IPs. Works when running locally.'
+          : ('Not available' + (r.error ? ': ' + r.error : ''));
         card.innerHTML = `
           <div class="card-top">
             <span class="app-name">${r.app}</span>
           </div>
-          <p class="unavailable-msg">Not available${r.error ? ': ' + r.error : ''}</p>`;
+          <p class="unavailable-msg">${msg}</p>`;
         cardsEl.appendChild(card);
         return;
       }

@@ -13,32 +13,39 @@ def _scrape_with_page(page, restaurant_name, address):
         page.goto(url, timeout=30000)
         page.wait_for_timeout(3000)
 
-        # Dismiss address modal if present
+        # Grubhub shows a "Let's get this right from the start" address modal.
+        # Type into its field, wait for the autocomplete dropdown, click the first
+        # suggestion to confirm the address, then click "Search Nearby".
+        # Clicking "Search Nearby" with unconfirmed freehand text leaves the modal open.
         try:
-            page.click('button[aria-label="Close"]', timeout=3000)
-            page.wait_for_timeout(600)
-        except Exception:
-            pass
-
-        # Set address via the nav address field
-        try:
-            addr_input = page.wait_for_selector(
-                '[placeholder="Address or zip code"]', timeout=8000
+            modal_input = page.wait_for_selector(
+                '[placeholder="Address or zip code"]', timeout=5000
             )
-            addr_input.click()
-            page.wait_for_timeout(400)
-            addr_input.fill('')
-            addr_input.type(address, delay=50)
-            page.wait_for_timeout(1500)
-            page.keyboard.press("Enter")
+            modal_input.click()
+            page.wait_for_timeout(300)
+            modal_input.type(address, delay=50)
+            # Wait for autocomplete suggestions and click the first one
+            try:
+                first_suggestion = page.wait_for_selector(
+                    '[class*="autocomplete"] li, [class*="Autocomplete"] li, '
+                    '[role="option"], [role="listbox"] li',
+                    timeout=4000
+                )
+                first_suggestion.click()
+                page.wait_for_timeout(500)
+            except PlaywrightTimeoutError:
+                # No autocomplete — press Enter to confirm the address
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(500)
+            page.click('button:has-text("Search Nearby")')
         except PlaywrightTimeoutError:
-            pass
+            pass  # modal wasn't present — URL params may have set address already
 
-        # Wait for restaurant cards
+        # Wait for restaurant cards to appear
         try:
             page.wait_for_selector(
                 '[class*="restaurantCard"], [data-testid="restaurant-card"], li[class*="restaurant"]',
-                timeout=10000
+                timeout=12000
             )
         except PlaywrightTimeoutError:
             pass

@@ -13,7 +13,8 @@ def _scrape_with_page(page, restaurant_name, address):
             return {
                 "app": "DoorDash",
                 "available": False,
-                "error": "Bot detection triggered — try again or use a residential proxy.",
+                "bot_blocked": True,
+                "error": "DoorDash is only available when running locally.",
             }
 
         # Dismiss login/signup modal if present
