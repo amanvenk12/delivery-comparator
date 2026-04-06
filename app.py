@@ -4,7 +4,7 @@ import resource
 import logging
 import threading
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_file
 
 load_dotenv()
 from compare import rank_results
@@ -159,6 +159,15 @@ def result(job_id):
         _jobs.pop(job_id, None)
         return jsonify({"status": "error", "error": job.get("error")}), 500
     return jsonify({"status": "pending"})
+
+
+@app.route('/screenshot')
+def screenshot():
+    """Temporary debug route — serves /tmp/doordash_cloud_debug.png."""
+    path = '/tmp/doordash_cloud_debug.png'
+    if not os.path.exists(path):
+        return "No screenshot found at /tmp/doordash_cloud_debug.png — run a comparison first.", 404
+    return send_file(path, mimetype='image/png')
 
 
 if __name__ == '__main__':
