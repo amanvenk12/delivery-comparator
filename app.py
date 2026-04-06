@@ -1,20 +1,12 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
-from playwright.sync_api import sync_playwright
-from playwright_stealth import Stealth
 
 load_dotenv()
-import scrapers.ubereats as _ue
-import scrapers.grubhub as _gh
-import scrapers.doordash as _dd
 from compare import rank_results
 
 app = Flask(__name__)
 
-# Browser launch config — headless=False required for DoorDash (Cloudflare Turnstile
-# blocks headless regardless of stealth flags). Uber Eats and Grubhub work fine in
-# headed mode too, so all three share one browser instance per request.
 _BROWSER_ARGS = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -29,28 +21,42 @@ _USER_AGENT = (
 
 def _run_scrapers(restaurant, address):
     """Launch one browser, run all three scrapers sequentially on separate pages,
-    then close the browser. Peak memory = one Chromium process instead of three."""
-    results = []
-    scrapers = [
-        (_ue._scrape_with_page, "Uber Eats"),
-        (_gh._scrape_with_page, "Grubhub"),
-        (_dd._scrape_with_page, "DoorDash"),
+    then close the browser. Peak memory = one Chromium process instead of three.
+
+    All heavy imports (playwright, stealth, scrapers) are deferred to inside this
+    function so gunicorn workers don't load them at startup — keeping idle RSS low
+    and avoiding the OOM kill on Render's 512MB Starter plan.
+    """
+    # Deferred imports — only loaded when a request actually arrives.
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+    import scrapers.ubereats as _ue
+    import scrapers.grubhub as _gh
+    import scrapers.doordash as _dd
+
+    scrape_fns = [
+        _ue._scrape_with_page,
+        _gh._scrape_with_page,
+        _dd._scrape_with_page,
     ]
+    stealth = Stealth()  # instantiate once, reuse across all three pages
+
+    results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
         try:
-            for scrape_fn, _ in scrapers:
+            for scrape_fn in scrape_fns:
                 context = browser.new_context(
                     user_agent=_USER_AGENT,
                     viewport={'width': 1280, 'height': 800},
                     locale='en-US',
                 )
                 page = context.new_page()
-                Stealth().apply_stealth_sync(page)
+                stealth.apply_stealth_sync(page)
                 try:
                     results.append(scrape_fn(page, restaurant, address))
                 finally:
-                    context.close()  # closes page + frees context memory
+                    context.close()
         finally:
             browser.close()
     return results

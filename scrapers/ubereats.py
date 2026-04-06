@@ -1,4 +1,3 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import re
 
 
@@ -53,6 +52,7 @@ def _scrape_with_page(page, restaurant_name, address):
 
 def scrape_ubereats(restaurant_name, address):
     """Standalone entry point — launches its own browser (used for local testing)."""
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()

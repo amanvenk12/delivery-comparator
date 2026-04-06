@@ -1,10 +1,9 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-from playwright_stealth import Stealth
 import re
 
 
 def _scrape_with_page(page, restaurant_name, address):
     """Scrape DoorDash using a pre-existing Playwright page."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
     try:
         page.goto("https://www.doordash.com", timeout=30000)
         page.wait_for_timeout(4000)
@@ -131,6 +130,8 @@ def scrape_doordash(restaurant_name, address):
         rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1280x800x24 &
         DISPLAY=:99 python app.py
     """
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=False,
