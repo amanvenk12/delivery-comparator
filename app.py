@@ -1,3 +1,4 @@
+import gc
 import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
@@ -44,9 +45,15 @@ def compare():
     if gh: promos['Grubhub'] = gh
     if ue: promos['Uber Eats'] = ue
 
+    # Run scrapers sequentially and force GC between each one so the
+    # Playwright browser process and Python objects are fully released
+    # before the next browser launches. Prevents memory spikes on Render.
     ubereats_result = scrape_ubereats(restaurant, address)
+    gc.collect()
     grubhub_result = scrape_grubhub(restaurant, address)
+    gc.collect()
     doordash_result = scrape_doordash(restaurant, address)
+    gc.collect()
     results, recommendation = rank_results(
         [ubereats_result, grubhub_result, doordash_result],
         memberships=memberships,
