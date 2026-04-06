@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Comparator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f5f7;
+      --surface:   #ffffff;
+      --border:    #e0e0e0;
+      --text:      #1a1a1a;
+      --muted:     #666;
+      --accent:    #2563eb;
+      --accent-lt: #eff6ff;
+      --green:     #16a34a;
+      --green-lt:  #f0fdf4;
+      --yellow:    #ca8a04;
+      --yellow-lt: #fefce8;
+      --red:       #dc2626;
+      --radius:    14px;
+      --shadow:    0 2px 12px rgba(0,0,0,.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: 24px 16px 48px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.3px; }
+    header p  { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+    /* ── form card ─────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      max-width: 520px;
+      margin: 0 auto 20px;
+    }
+
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-bottom: 6px;
+    }
+    .field input[type="text"],
+    .field input[type="number"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .15s;
+      background: var(--bg);
+    }
+    .field input:focus { border-color: var(--accent); background: #fff; }
+
+    /* ── membership toggles ─────────────────────────────────────── */
+    .section-title {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-bottom: 10px;
+    }
+
+    .toggles {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color .15s, background .15s;
+    }
+    .toggle-row:has(.toggle-input:checked) {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+    }
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toggle-label .badge {
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .toggle-label .badge.dd  { background: #fee2e2; color: #991b1b; }
+    .toggle-label .badge.gh  { background: #fef9c3; color: #854d0e; }
+    .toggle-label .badge.ue  { background: #d1fae5; color: #065f46; }
+    .toggle-label .name { font-size: .9rem; font-weight: 500; }
+    .toggle-label .sub  { font-size: .75rem; color: var(--muted); }
+
+    /* custom switch */
+    .switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch .toggle-input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .switch .slider {
+      position: absolute;
+      inset: 0;
+      background: #d1d5db;
+      border-radius: 99px;
+      transition: background .2s;
+    }
+    .switch .slider::before {
+      content: "";
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .switch .toggle-input:checked + .slider { background: var(--accent); }
+    .switch .toggle-input:checked + .slider::before { transform: translateX(18px); }
+
+    /* ── promo section ──────────────────────────────────────────── */
+    .promos {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .promo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .promo-row .promo-label {
+      font-size: .85rem;
+      font-weight: 500;
+      width: 96px;
+      flex-shrink: 0;
+    }
+    .promo-row input[type="number"] {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: .9rem;
+      outline: none;
+      background: var(--bg);
+      transition: border-color .15s;
+    }
+    .promo-row input[type="number"]:focus { border-color: var(--accent); background: #fff; }
+
+    /* ── submit button ──────────────────────────────────────────── */
+    .btn-compare {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .btn-compare:active { transform: scale(.98); }
+    .btn-compare:hover  { background: #1d4ed8; }
+    .btn-compare:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* ── spinner ────────────────────────────────────────────────── */
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 32px 0;
+      color: var(--muted);
+      font-size: .9rem;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── results ────────────────────────────────────────────────── */
+    #results { display: none; max-width: 520px; margin: 0 auto; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .results-header h2 { font-size: 1.1rem; font-weight: 700; }
+    .btn-back {
+      font-size: .85rem;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .btn-back:hover { background: var(--accent-lt); }
+
+    /* recommendation banner */
+    .rec-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--green-lt);
+      border: 1px solid #bbf7d0;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+    .rec-banner .rec-icon { font-size: 1.4rem; }
+    .rec-banner .rec-text { font-size: .85rem; color: var(--green); }
+    .rec-banner .rec-text strong { font-size: 1rem; display: block; color: #15803d; }
+
+    /* result cards */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      position: relative;
+      transition: border-color .15s;
+    }
+    .result-card.is-recommended {
+      border-color: var(--green);
+    }
+    .result-card.is-unavailable { opacity: .55; }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .app-name { font-size: 1rem; font-weight: 700; }
+    .score-pill {
+      font-size: .75rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .score-pill.top { background: var(--green-lt); color: var(--green); border-color: #bbf7d0; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .metric {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 10px 10px 8px;
+      text-align: center;
+    }
+    .metric .m-value { font-size: 1rem; font-weight: 700; }
+    .metric .m-label { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+
+    .badges-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .pill {
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .pill-rank-cheap  { background: var(--yellow-lt); color: var(--yellow); }
+    .pill-rank-fast   { background: #eff6ff; color: #2563eb; }
+    .pill-membership  { background: #faf5ff; color: #7c3aed; }
+    .pill-promo       { background: #fef2f2; color: var(--red); }
+    .pill-rec         { background: var(--green-lt); color: var(--green); }
+
+    .unavailable-msg {
+      font-size: .85rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .disclaimer {
+      font-size: .72rem;
+      color: #aaa;
+      text-align: center;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+
+    /* ── Google Places autocomplete dropdown ───────────────────── */
+    .pac-container {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: .9rem;
+      margin-top: 4px;
+      overflow: hidden;
+      z-index: 9999;
+    }
+    .pac-item {
+      padding: 9px 14px;
+      cursor: pointer;
+      color: var(--text);
+      border-top: 1px solid var(--border);
+    }
+    .pac-item:first-child { border-top: none; }
+    .pac-item:hover, .pac-item-selected { background: var(--accent-lt); }
+    .pac-item-query { font-weight: 600; color: var(--text); }
+    .pac-matched { color: var(--accent); }
+    .pac-icon { display: none; }
+
+    /* ── error ──────────────────────────────────────────────────── */
+    #error-msg {
+      display: none;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius);
+      color: var(--red);
+      font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Delivery Comparator</h1>
+  <p>Find the cheapest, fastest delivery for any restaurant</p>
+</header>
+
+<!-- ── Search form ─────────────────────────────────────────────── -->
+<div class="card" id="form-card">
+  <div class="field">
+    <label for="restaurant">Restaurant</label>
+    <input id="restaurant" type="text" placeholder="e.g. Shake Shack" value="Shake Shack" />
+  </div>
+  <div class="field">
+    <label for="address">Delivery address</label>
+    <input id="address" type="text" placeholder="e.g. New York, NY 10001" value="New York, NY 10001" />
+  </div>
+
+  <div class="section-title" style="margin-top:4px">Memberships</div>
+  <div class="toggles">
+    <label class="toggle-row">
+      <span class="toggle-label">
+        <span class="badge dd">DashPass</span>
+        <span>
+          <span class="name">DoorDash</span>
+          <span class="sub">Free delivery with DashPass</span>
+        </span>
+      </span>
+      <span class="switch">
+        <input class="toggle-input" type="checkbox" id="dashpass" />
+        <span class="slider"></span>
+      </span>
+    </label>
+
+    <label class="toggle-row">
+      <span class="toggle-label">
+        <span class="badge gh">Grubhub+</span>
+        <span>
+          <span class="name">Grubhub</span>
+          <span class="sub">Free delivery with Grubhub+</span>
+        </span>
+      </span>
+      <span class="switch">
+        <input class="toggle-input" type="checkbox" id="grubhub_plus" />
+        <span class="slider"></span>
+      </span>
+    </label>
+
+    <label class="toggle-row">
+      <span class="toggle-label">
+        <span class="badge ue">Uber One</span>
+        <span>
+          <span class="name">Uber Eats</span>
+          <span class="sub">Free delivery with Uber One</span>
+        </span>
+      </span>
+      <span class="switch">
+        <input class="toggle-input" type="checkbox" id="uber_one" />
+        <span class="slider"></span>
+      </span>
+    </label>
+  </div>
+
+  <div class="section-title">Promo discounts (optional)</div>
+  <div class="promos">
+    <div class="promo-row">
+      <span class="promo-label">DoorDash</span>
+      <input id="doordash_promo" type="number" min="0" step="0.01" placeholder="$ off delivery fee" />
+    </div>
+    <div class="promo-row">
+      <span class="promo-label">Grubhub</span>
+      <input id="grubhub_promo" type="number" min="0" step="0.01" placeholder="$ off delivery fee" />
+    </div>
+    <div class="promo-row">
+      <span class="promo-label">Uber Eats</span>
+      <input id="ubereats_promo" type="number" min="0" step="0.01" placeholder="$ off delivery fee" />
+    </div>
+  </div>
+
+  <button class="btn-compare" id="btn-compare" onclick="runCompare()">Compare prices</button>
+</div>
+
+<!-- ── Loading ─────────────────────────────────────────────────── -->
+<div id="loading">
+  <div class="spinner"></div>
+  Checking all three apps…
+</div>
+
+<!-- ── Error ───────────────────────────────────────────────────── -->
+<div id="error-msg"></div>
+
+<!-- ── Results ─────────────────────────────────────────────────── -->
+<div id="results">
+  <div class="results-header">
+    <h2 id="results-title">Results</h2>
+    <button class="btn-back" onclick="showForm()">&#8592; New search</button>
+  </div>
+  <div id="rec-banner"></div>
+  <div id="cards"></div>
+  <p class="disclaimer">* Fees shown are estimates and may vary based on your order total, time of day, and location.</p>
+</div>
+
+<script>
+  function showForm() {
+    document.getElementById('form-card').style.display = '';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+  }
+
+  async function runCompare() {
+    const restaurant = document.getElementById('restaurant').value.trim();
+    const address    = document.getElementById('address').value.trim();
+    if (!restaurant || !address) {
+      alert('Please enter a restaurant and address.');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      restaurant,
+      address,
+      dashpass:     document.getElementById('dashpass').checked     ? 'true' : 'false',
+      grubhub_plus: document.getElementById('grubhub_plus').checked ? 'true' : 'false',
+      uber_one:     document.getElementById('uber_one').checked     ? 'true' : 'false',
+    });
+
+    const ddPromo = parseFloat(document.getElementById('doordash_promo').value);
+    const ghPromo = parseFloat(document.getElementById('grubhub_promo').value);
+    const uePromo = parseFloat(document.getElementById('ubereats_promo').value);
+    if (ddPromo > 0) params.set('doordash_promo', ddPromo);
+    if (ghPromo > 0) params.set('grubhub_promo',  ghPromo);
+    if (uePromo > 0) params.set('ubereats_promo',  uePromo);
+
+    document.getElementById('form-card').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+    document.getElementById('results').style.display   = 'none';
+    document.getElementById('loading').style.display   = 'block';
+    document.getElementById('btn-compare').disabled    = true;
+
+    try {
+      const res  = await fetch('/compare?' + params.toString());
+      if (!res.ok) throw new Error('Server error ' + res.status);
+      const data = await res.json();
+      renderResults(data, restaurant, address);
+    } catch (err) {
+      document.getElementById('loading').style.display   = 'none';
+      document.getElementById('form-card').style.display = '';
+      document.getElementById('error-msg').style.display = 'block';
+      document.getElementById('error-msg').textContent   = 'Something went wrong: ' + err.message;
+    } finally {
+      document.getElementById('btn-compare').disabled = false;
+    }
+  }
+
+  function renderResults(data, restaurant, address) {
+    document.getElementById('loading').style.display = 'none';
+
+    const { results, recommendation } = data;
+
+    document.getElementById('results-title').textContent =
+      restaurant + ' · ' + address;
+
+    const bannerEl = document.getElementById('rec-banner');
+    if (recommendation) {
+      bannerEl.innerHTML = `
+        <div class="rec-banner">
+          <span class="rec-icon">&#127942;</span>
+          <span class="rec-text">
+            <strong>${recommendation}</strong>
+            Best overall based on price &amp; speed
+          </span>
+        </div>`;
+    } else {
+      bannerEl.innerHTML = '';
+    }
+
+    const sorted = [...results].sort((a, b) => {
+      if (!a.available && b.available)  return  1;
+      if (a.available  && !b.available) return -1;
+      return (b.recommendation_score ?? -1) - (a.recommendation_score ?? -1);
+    });
+
+    const cardsEl = document.getElementById('cards');
+    cardsEl.innerHTML = '';
+
+    sorted.forEach(r => {
+      const isRec  = r.app === recommendation;
+      const card   = document.createElement('div');
+      card.className = 'result-card' +
+        (isRec        ? ' is-recommended' : '') +
+        (!r.available ? ' is-unavailable'  : '');
+
+      if (!r.available) {
+        card.innerHTML = `
+          <div class="card-top">
+            <span class="app-name">${r.app}</span>
+          </div>
+          <p class="unavailable-msg">Not available${r.error ? ': ' + r.error : ''}</p>`;
+        cardsEl.appendChild(card);
+        return;
+      }
+
+      const feeRaw = r.fee_dollars != null ? '$' + r.fee_dollars.toFixed(2) : r.delivery_fee ?? '—';
+      const fee    = (r.fee_dollars === 0) ? feeRaw + '*' : feeRaw;
+      const time  = r.delivery_time ?? '—';
+      const score = r.recommendation_score != null ? r.recommendation_score : '—';
+
+      card.innerHTML = `
+        <div class="card-top">
+          <span class="app-name">${r.app}</span>
+          <span class="score-pill${isRec ? ' top' : ''}">Score ${score}</span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="m-value">${fee}</div>
+            <div class="m-label">Delivery fee</div>
+          </div>
+          <div class="metric">
+            <div class="m-value">${time}</div>
+            <div class="m-label">Est. time</div>
+          </div>
+          <div class="metric">
+            <div class="m-value">#${r.rank_cheapest ?? '—'}</div>
+            <div class="m-label">Cheapest</div>
+          </div>
+        </div>
+        ${buildPills(r, isRec)}`;
+
+      cardsEl.appendChild(card);
+    });
+
+    document.getElementById('results').style.display = 'block';
+  }
+
+  function buildPills(r, isRec) {
+    const pills = [];
+    if (r.rank_cheapest === 1) pills.push(['pill-rank-cheap', '&#128176; Cheapest']);
+    if (r.rank_fastest  === 1) pills.push(['pill-rank-fast',  '&#9889; Fastest']);
+    if (r.membership_discount) pills.push(['pill-membership', '&#10003; Membership discount']);
+    if (r.promo_applied) pills.push(['pill-promo', `&#127991; -$${r.promo_applied.toFixed(2)} promo`]);
+    if (isRec) pills.push(['pill-rec', '&#127942; Recommended']);
+    if (!pills.length) return '';
+    return '<div class="badges-row">' +
+      pills.map(([cls, label]) => `<span class="pill ${cls}">${label}</span>`).join('') +
+      '</div>';
+  }
+
+  // Submit on Enter — but only when the Places autocomplete dropdown is NOT open,
+  // because pressing Enter to select a suggestion must not also fire the search.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (document.getElementById('form-card').style.display === 'none') return;
+    const pacOpen = document.querySelector('.pac-container:not([style*="display: none"])');
+    if (!pacOpen) runCompare();
+  });
+
+  // ── Google Places Autocomplete ────────────────────────────────
+  // Called by the Maps JS SDK once it has loaded (see script tag below).
+  function initAutocomplete() {
+    // Bounding box covering all five NYC boroughs.
+    const nycBounds = new google.maps.LatLngBounds(
+      new google.maps.LatLng(40.4774, -74.2591),  // SW corner
+      new google.maps.LatLng(40.9176, -73.7004)   // NE corner
+    );
+
+    // Restaurant field — establishment type, biased toward NYC but not hard-restricted
+    // so that a restaurant name like "Shake Shack" still resolves even if the nearest
+    // matching establishment is just outside the bounding box.
+    const restaurantAC = new google.maps.places.Autocomplete(
+      document.getElementById('restaurant'),
+      {
+        types: ['establishment'],
+        componentRestrictions: { country: 'us' },
+        fields: ['name'],
+        bounds: nycBounds,
+        strictBounds: false,
+      }
+    );
+    restaurantAC.addListener('place_changed', () => {
+      const place = restaurantAC.getPlace();
+      if (place.name) {
+        document.getElementById('restaurant').value = place.name;
+      }
+    });
+
+    // Address field — addresses only, hard-restricted to the NYC bounding box.
+    const addressAC = new google.maps.places.Autocomplete(
+      document.getElementById('address'),
+      {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+        fields: ['formatted_address'],
+        bounds: nycBounds,
+        strictBounds: true,
+      }
+    );
+    addressAC.addListener('place_changed', () => {
+      const place = addressAC.getPlace();
+      if (place.formatted_address) {
+        document.getElementById('address').value = place.formatted_address;
+      }
+    });
+  }
+</script>
+
+<!-- Replace YOUR_GOOGLE_MAPS_API_KEY with your real key before deploying.
+     Required APIs to enable in Google Cloud Console:
+       - Maps JavaScript API
+       - Places API                                                        -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNjNxqDMKY7pQwfi4NLXTaRIXaIspm0QI&libraries=places&callback=initAutocomplete"
+  async defer>
+</script>
+
+</body>
+</html>
