@@ -98,6 +98,22 @@ def _scrape_with_page(page, restaurant_name, address):
         page.wait_for_timeout(1500)
         _screenshot(page, _DEBUG_SCREENSHOT_PATH, "after_search")
 
+        # Dump page state for debugging
+        current_url = page.url
+        page_title = page.title()
+        all_text = page.inner_text("body")[:500]  # first 500 chars
+
+        log.info(f"DoorDash URL after search: {current_url}")
+        log.info(f"DoorDash page title: {page_title}")
+        log.info(f"DoorDash body preview: {all_text}")
+
+        # Also dump ALL data-testid attributes present on page
+        testids = page.eval_on_selector_all(
+            "[data-testid]",
+            "els => els.map(e => e.getAttribute('data-testid')).slice(0, 20)"
+        )
+        log.info(f"DoorDash testids found: {testids}")
+
         time_text = "Unknown"
         fee_text = "Unknown"
 
