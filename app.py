@@ -1,4 +1,8 @@
+import os
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
+
+load_dotenv()
 from scrapers.ubereats import scrape_ubereats
 from scrapers.grubhub import scrape_grubhub
 from scrapers.doordash import scrape_doordash
@@ -8,7 +12,10 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template(
+        'index.html',
+        google_maps_api_key=os.environ.get('GOOGLE_MAPS_API_KEY', ''),
+    )
 
 @app.route('/compare')
 def compare():

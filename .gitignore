@@ -4,3 +4,4 @@ scrapers/__pycache__/
 *.pyc
 *_debug*.png
 *_error.png
+.env

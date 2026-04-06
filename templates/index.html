@@ -677,12 +677,12 @@
   }
 </script>
 
-<!-- Replace YOUR_GOOGLE_MAPS_API_KEY with your real key before deploying.
+<!-- API key injected by Flask from the GOOGLE_MAPS_API_KEY environment variable.
      Required APIs to enable in Google Cloud Console:
        - Maps JavaScript API
        - Places API                                                        -->
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNjNxqDMKY7pQwfi4NLXTaRIXaIspm0QI&libraries=places&callback=initAutocomplete"
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initAutocomplete"
   async defer>
 </script>
 
