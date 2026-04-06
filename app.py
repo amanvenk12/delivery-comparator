@@ -1,11 +1,22 @@
 import os
+import resource
+import logging
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
 
 load_dotenv()
 from compare import rank_results
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+log = logging.getLogger(__name__)
+
 app = Flask(__name__)
+
+
+def _rss_mb():
+    # Linux reports ru_maxrss in kilobytes; macOS in bytes.
+    raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return raw / 1024 if os.uname().sysname == 'Linux' else raw / (1024 * 1024)
 
 _BROWSER_ARGS = [
     '--no-sandbox',
@@ -35,19 +46,19 @@ def _run_scrapers(restaurant, address):
     import scrapers.doordash as _dd
 
     scrape_fns = [
-        _ue._scrape_with_page,
-        _gh._scrape_with_page,
-        _dd._scrape_with_page,
+        (_ue._scrape_with_page, "Uber Eats"),
+        (_gh._scrape_with_page, "Grubhub"),
+        (_dd._scrape_with_page, "DoorDash"),
     ]
 
     results = []
+    log.info("MEM scrape_start: %.1f MB RSS", _rss_mb())
+
     with sync_playwright() as p:
+        log.info("MEM playwright_init: %.1f MB RSS", _rss_mb())
         browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
+        log.info("MEM browser_launch: %.1f MB RSS", _rss_mb())
         try:
-            # Single context and page reused across all three scrapers.
-            # Each scraper navigates to a different domain so there is no
-            # meaningful cookie/storage isolation to lose — and sharing one
-            # V8 heap instead of three saves ~150MB peak RSS.
             context = browser.new_context(
                 user_agent=_USER_AGENT,
                 viewport={'width': 1280, 'height': 800},
@@ -55,13 +66,21 @@ def _run_scrapers(restaurant, address):
             )
             page = context.new_page()
             Stealth().apply_stealth_sync(page)
+            log.info("MEM page_ready: %.1f MB RSS", _rss_mb())
             try:
-                for scrape_fn in scrape_fns:
-                    results.append(scrape_fn(page, restaurant, address))
+                for scrape_fn, name in scrape_fns:
+                    log.info("MEM before_%s: %.1f MB RSS", name, _rss_mb())
+                    result = scrape_fn(page, restaurant, address)
+                    results.append(result)
+                    log.info("MEM after_%s: %.1f MB RSS", name, _rss_mb())
             finally:
                 context.close()
+                log.info("MEM context_closed: %.1f MB RSS", _rss_mb())
         finally:
             browser.close()
+            log.info("MEM browser_closed: %.1f MB RSS", _rss_mb())
+
+    log.info("MEM scrape_done: %.1f MB RSS", _rss_mb())
     return results
 
 
