@@ -30,6 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
 WORKDIR /app
 
 # Install Python dependencies first — this layer is cached unless
