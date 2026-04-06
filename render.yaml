@@ -3,7 +3,7 @@ services:
     name: delivery-comparator
     env: docker
     region: oregon
-    plan: starter
+    plan: standard
     envVars:
       - key: GOOGLE_MAPS_API_KEY
         sync: false

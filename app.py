@@ -39,24 +39,27 @@ def _run_scrapers(restaurant, address):
         _gh._scrape_with_page,
         _dd._scrape_with_page,
     ]
-    stealth = Stealth()  # instantiate once, reuse across all three pages
 
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
         try:
-            for scrape_fn in scrape_fns:
-                context = browser.new_context(
-                    user_agent=_USER_AGENT,
-                    viewport={'width': 1280, 'height': 800},
-                    locale='en-US',
-                )
-                page = context.new_page()
-                stealth.apply_stealth_sync(page)
-                try:
+            # Single context and page reused across all three scrapers.
+            # Each scraper navigates to a different domain so there is no
+            # meaningful cookie/storage isolation to lose — and sharing one
+            # V8 heap instead of three saves ~150MB peak RSS.
+            context = browser.new_context(
+                user_agent=_USER_AGENT,
+                viewport={'width': 1280, 'height': 800},
+                locale='en-US',
+            )
+            page = context.new_page()
+            Stealth().apply_stealth_sync(page)
+            try:
+                for scrape_fn in scrape_fns:
                     results.append(scrape_fn(page, restaurant, address))
-                finally:
-                    context.close()
+            finally:
+                context.close()
         finally:
             browser.close()
     return results
