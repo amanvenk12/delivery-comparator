@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: delivery-comparator
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
