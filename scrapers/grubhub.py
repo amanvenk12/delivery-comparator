@@ -27,8 +27,7 @@ def _scrape_with_page(page, restaurant_name, address):
             # Wait for autocomplete suggestions and click the first one
             try:
                 first_suggestion = page.wait_for_selector(
-                    '[class*="autocomplete"] li, [class*="Autocomplete"] li, '
-                    '[role="option"], [role="listbox"] li',
+                    '[role="option"]',
                     timeout=4000
                 )
                 first_suggestion.click()
