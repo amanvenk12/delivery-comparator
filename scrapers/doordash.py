@@ -1,20 +1,13 @@
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright_stealth import Stealth
 import re
 
 
 def scrape_doordash(restaurant_name, address):
-    # PRODUCTION NOTE: DoorDash runs Cloudflare Turnstile which reliably blocks
-    # headless Chromium regardless of stealth flags — the check is IP/TLS-level,
-    # not just navigator.webdriver. headless=False is the only reliable local fix.
-    # For cloud deployment, run under a virtual display:
-    #   apt-get install -y xvfb
-    #   Xvfb :99 -screen 0 1280x800x24 &
-    #   DISPLAY=:99 python app.py
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=False,
             args=[
-                '--disable-blink-features=AutomationControlled',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
@@ -27,6 +20,9 @@ def scrape_doordash(restaurant_name, address):
             locale='en-US',
         )
         page = context.new_page()
+        # Apply stealth patches — masks navigator.webdriver, chrome runtime,
+        # permissions API, and ~20 other signals Cloudflare fingerprints.
+        Stealth().apply_stealth_sync(page)
 
         try:
             page.goto("https://www.doordash.com", timeout=30000)
