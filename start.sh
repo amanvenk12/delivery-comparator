@@ -10,4 +10,4 @@ export DISPLAY=:99
 # Give Xvfb a moment to initialize before Flask starts accepting requests.
 sleep 1
 
-exec gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT --timeout 120
+exec gunicorn app:app --workers 1 --threads 1 --bind 0.0.0.0:$PORT --timeout 120

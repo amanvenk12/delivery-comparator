@@ -1,15 +1,60 @@
-import gc
 import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
+from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 
 load_dotenv()
-from scrapers.ubereats import scrape_ubereats
-from scrapers.grubhub import scrape_grubhub
-from scrapers.doordash import scrape_doordash
+import scrapers.ubereats as _ue
+import scrapers.grubhub as _gh
+import scrapers.doordash as _dd
 from compare import rank_results
 
 app = Flask(__name__)
+
+# Browser launch config — headless=False required for DoorDash (Cloudflare Turnstile
+# blocks headless regardless of stealth flags). Uber Eats and Grubhub work fine in
+# headed mode too, so all three share one browser instance per request.
+_BROWSER_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--window-size=1280,800',
+]
+_USER_AGENT = (
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+)
+
+
+def _run_scrapers(restaurant, address):
+    """Launch one browser, run all three scrapers sequentially on separate pages,
+    then close the browser. Peak memory = one Chromium process instead of three."""
+    results = []
+    scrapers = [
+        (_ue._scrape_with_page, "Uber Eats"),
+        (_gh._scrape_with_page, "Grubhub"),
+        (_dd._scrape_with_page, "DoorDash"),
+    ]
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
+        try:
+            for scrape_fn, _ in scrapers:
+                context = browser.new_context(
+                    user_agent=_USER_AGENT,
+                    viewport={'width': 1280, 'height': 800},
+                    locale='en-US',
+                )
+                page = context.new_page()
+                Stealth().apply_stealth_sync(page)
+                try:
+                    results.append(scrape_fn(page, restaurant, address))
+                finally:
+                    context.close()  # closes page + frees context memory
+        finally:
+            browser.close()
+    return results
+
 
 @app.route('/')
 def home():
@@ -45,17 +90,9 @@ def compare():
     if gh: promos['Grubhub'] = gh
     if ue: promos['Uber Eats'] = ue
 
-    # Run scrapers sequentially and force GC between each one so the
-    # Playwright browser process and Python objects are fully released
-    # before the next browser launches. Prevents memory spikes on Render.
-    ubereats_result = scrape_ubereats(restaurant, address)
-    gc.collect()
-    grubhub_result = scrape_grubhub(restaurant, address)
-    gc.collect()
-    doordash_result = scrape_doordash(restaurant, address)
-    gc.collect()
+    scraper_results = _run_scrapers(restaurant, address)
     results, recommendation = rank_results(
-        [ubereats_result, grubhub_result, doordash_result],
+        scraper_results,
         memberships=memberships,
         promos=promos,
     )
