@@ -512,9 +512,13 @@
     document.getElementById('btn-compare').disabled    = true;
 
     try {
-      const res  = await fetch('/compare?' + params.toString());
-      if (!res.ok) throw new Error('Server error ' + res.status);
-      const data = await res.json();
+      // POST the job — returns immediately with a job_id.
+      const startRes = await fetch('/compare?' + params.toString());
+      if (!startRes.ok) throw new Error('Server error ' + startRes.status);
+      const { job_id } = await startRes.json();
+
+      // Poll /result/<job_id> every 2 seconds until done.
+      const data = await pollResult(job_id);
       renderResults(data, restaurant, address);
     } catch (err) {
       document.getElementById('loading').style.display   = 'none';
@@ -524,6 +528,19 @@
     } finally {
       document.getElementById('btn-compare').disabled = false;
     }
+  }
+
+  async function pollResult(jobId, intervalMs = 2000, maxAttempts = 90) {
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, intervalMs));
+      const res = await fetch('/result/' + jobId);
+      if (!res.ok) throw new Error('Poll error ' + res.status);
+      const data = await res.json();
+      if (data.status === 'done')    return data;
+      if (data.status === 'error')   throw new Error(data.error || 'Scrape failed');
+      // status === 'pending' — keep polling
+    }
+    throw new Error('Timed out waiting for results.');
   }
 
   function renderResults(data, restaurant, address) {

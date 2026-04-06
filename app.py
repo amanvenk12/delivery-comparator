@@ -1,6 +1,8 @@
 import os
+import uuid
 import resource
 import logging
+import threading
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template
 
@@ -12,11 +14,9 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-
-def _rss_mb():
-    # Linux reports ru_maxrss in kilobytes; macOS in bytes.
-    raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return raw / 1024 if os.uname().sysname == 'Linux' else raw / (1024 * 1024)
+# In-memory job store: {job_id: {"status": "pending"|"done"|"error", "data": ...}}
+# Simple dict is safe because gunicorn runs --workers 1 --threads 1.
+_jobs = {}
 
 _BROWSER_ARGS = [
     '--no-sandbox',
@@ -30,15 +30,13 @@ _USER_AGENT = (
 )
 
 
-def _run_scrapers(restaurant, address):
-    """Launch one browser, run all three scrapers sequentially on separate pages,
-    then close the browser. Peak memory = one Chromium process instead of three.
+def _rss_mb():
+    raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return raw / 1024 if os.uname().sysname == 'Linux' else raw / (1024 * 1024)
 
-    All heavy imports (playwright, stealth, scrapers) are deferred to inside this
-    function so gunicorn workers don't load them at startup — keeping idle RSS low
-    and avoiding the OOM kill on Render's 512MB Starter plan.
-    """
-    # Deferred imports — only loaded when a request actually arrives.
+
+def _run_scrapers(restaurant, address):
+    # Deferred imports so gunicorn workers stay lean at startup.
     from playwright.sync_api import sync_playwright
     from playwright_stealth import Stealth
     import scrapers.ubereats as _ue
@@ -55,7 +53,6 @@ def _run_scrapers(restaurant, address):
     log.info("MEM scrape_start: %.1f MB RSS", _rss_mb())
 
     with sync_playwright() as p:
-        log.info("MEM playwright_init: %.1f MB RSS", _rss_mb())
         browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
         log.info("MEM browser_launch: %.1f MB RSS", _rss_mb())
         try:
@@ -66,22 +63,37 @@ def _run_scrapers(restaurant, address):
             )
             page = context.new_page()
             Stealth().apply_stealth_sync(page)
-            log.info("MEM page_ready: %.1f MB RSS", _rss_mb())
             try:
                 for scrape_fn, name in scrape_fns:
                     log.info("MEM before_%s: %.1f MB RSS", name, _rss_mb())
-                    result = scrape_fn(page, restaurant, address)
-                    results.append(result)
+                    results.append(scrape_fn(page, restaurant, address))
                     log.info("MEM after_%s: %.1f MB RSS", name, _rss_mb())
             finally:
                 context.close()
-                log.info("MEM context_closed: %.1f MB RSS", _rss_mb())
         finally:
             browser.close()
             log.info("MEM browser_closed: %.1f MB RSS", _rss_mb())
 
-    log.info("MEM scrape_done: %.1f MB RSS", _rss_mb())
     return results
+
+
+def _scrape_job(job_id, restaurant, address, memberships, promos):
+    """Runs in a background thread. Stores result in _jobs when done."""
+    try:
+        scraper_results = _run_scrapers(restaurant, address)
+        results, recommendation = rank_results(
+            scraper_results,
+            memberships=memberships,
+            promos=promos,
+        )
+        _jobs[job_id] = {
+            "status": "done",
+            "data": {"results": results, "recommendation": recommendation},
+        }
+        log.info("Job %s done", job_id)
+    except Exception as e:
+        log.exception("Job %s failed", job_id)
+        _jobs[job_id] = {"status": "error", "error": str(e)}
 
 
 @app.route('/')
@@ -91,17 +103,19 @@ def home():
         google_maps_api_key=os.environ.get('GOOGLE_MAPS_API_KEY', ''),
     )
 
+
 @app.route('/compare')
 def compare():
+    """Starts a scrape job and returns a job_id immediately.
+    Responds in <100ms so Render's proxy never times out.
+    """
     restaurant = request.args.get('restaurant', 'Shake Shack')
-    address = request.args.get('address', 'New York, NY 10001')
+    address    = request.args.get('address', 'New York, NY 10001')
+
     memberships = []
-    if request.args.get('dashpass') == 'true':
-        memberships.append('dashpass')
-    if request.args.get('grubhub_plus') == 'true':
-        memberships.append('grubhub_plus')
-    if request.args.get('uber_one') == 'true':
-        memberships.append('uber_one')
+    if request.args.get('dashpass')     == 'true': memberships.append('dashpass')
+    if request.args.get('grubhub_plus') == 'true': memberships.append('grubhub_plus')
+    if request.args.get('uber_one')     == 'true': memberships.append('uber_one')
 
     def _parse_promo(param):
         try:
@@ -114,20 +128,38 @@ def compare():
     dd = _parse_promo('doordash_promo')
     gh = _parse_promo('grubhub_promo')
     ue = _parse_promo('ubereats_promo')
-    if dd: promos['DoorDash'] = dd
-    if gh: promos['Grubhub'] = gh
+    if dd: promos['DoorDash']  = dd
+    if gh: promos['Grubhub']   = gh
     if ue: promos['Uber Eats'] = ue
 
-    scraper_results = _run_scrapers(restaurant, address)
-    results, recommendation = rank_results(
-        scraper_results,
-        memberships=memberships,
-        promos=promos,
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "pending"}
+
+    t = threading.Thread(
+        target=_scrape_job,
+        args=(job_id, restaurant, address, memberships, promos),
+        daemon=True,
     )
-    return jsonify({
-        "results": results,
-        "recommendation": recommendation,
-    })
+    t.start()
+
+    return jsonify({"job_id": job_id})
+
+
+@app.route('/result/<job_id>')
+def result(job_id):
+    """Polled by the frontend every 2 seconds until status is 'done' or 'error'."""
+    job = _jobs.get(job_id)
+    if job is None:
+        return jsonify({"status": "not_found"}), 404
+    if job["status"] == "done":
+        # Clean up after delivery so _jobs doesn't grow unbounded.
+        _jobs.pop(job_id, None)
+        return jsonify({"status": "done", **job["data"]})
+    if job["status"] == "error":
+        _jobs.pop(job_id, None)
+        return jsonify({"status": "error", "error": job.get("error")}), 500
+    return jsonify({"status": "pending"})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
