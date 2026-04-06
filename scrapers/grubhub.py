@@ -37,13 +37,22 @@ def _scrape_with_page(page, restaurant_name, address):
                 page.keyboard.press("Enter")
                 page.wait_for_timeout(500)
             page.click('button:has-text("Search Nearby")')
+            # Wait for modal to fully close before reading results —
+            # restaurant cards exist in the DOM behind the modal, so
+            # wait_for_selector returns too early if we don't wait here.
+            try:
+                page.wait_for_selector(
+                    '[placeholder="Address or zip code"]', state='hidden', timeout=8000
+                )
+            except PlaywrightTimeoutError:
+                pass
         except PlaywrightTimeoutError:
             pass  # modal wasn't present — URL params may have set address already
 
         # Wait for restaurant cards to appear
         try:
             page.wait_for_selector(
-                '[class*="restaurantCard"], [data-testid="restaurant-card"], li[class*="restaurant"]',
+                '[class*="restaurantCard"], [data-testid="restaurant-card"]',
                 timeout=12000
             )
         except PlaywrightTimeoutError:
@@ -60,10 +69,7 @@ def _scrape_with_page(page, restaurant_name, address):
             time_text = time_match.group(0)
 
         # Fee is only on the restaurant page — click the first result
-        first_link = page.query_selector(
-            'a[href*="/restaurant/"], a[class*="restaurantCard"], '
-            '[data-testid="restaurant-card"] a, li[class*="restaurant"] a'
-        )
+        first_link = page.query_selector('a[href*="/restaurant/"]')
         if first_link:
             first_link.click()
             try:
