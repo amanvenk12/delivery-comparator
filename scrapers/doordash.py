@@ -1,4 +1,18 @@
 import re
+import logging
+import os
+
+log = logging.getLogger(__name__)
+
+_DEBUG_SCREENSHOT_PATH = "/tmp/doordash_cloud_debug.png"
+
+
+def _screenshot(page, path, label):
+    try:
+        page.screenshot(path=path)
+        log.info("DoorDash debug screenshot saved: %s (%s)", path, label)
+    except Exception as e:
+        log.warning("DoorDash screenshot failed (%s): %s", label, e)
 
 
 def _scrape_with_page(page, restaurant_name, address):
@@ -10,6 +24,7 @@ def _scrape_with_page(page, restaurant_name, address):
 
         content = page.content()
         if 'Verify you are human' in content or 'security verification' in content.lower():
+            _screenshot(page, _DEBUG_SCREENSHOT_PATH, "bot_blocked")
             return {
                 "app": "DoorDash",
                 "available": False,
@@ -81,6 +96,7 @@ def _scrape_with_page(page, restaurant_name, address):
             pass
 
         page.wait_for_timeout(1500)
+        _screenshot(page, _DEBUG_SCREENSHOT_PATH, "after_search")
 
         time_text = "Unknown"
         fee_text = "Unknown"
@@ -88,6 +104,7 @@ def _scrape_with_page(page, restaurant_name, address):
         first_card = page.query_selector('[data-anchor-id="StoreCard"]')
         if first_card:
             card_text = first_card.inner_text()
+            log.info("DoorDash first StoreCard text: %r", card_text[:300])
             time_match = (
                 re.search(r'[·•]\s*(\d+)\s*min', card_text) or
                 re.search(r'\b(\d+)\s*min\b', card_text)
@@ -101,6 +118,7 @@ def _scrape_with_page(page, restaurant_name, address):
             if fee_match:
                 fee_text = fee_match.group(0)
         else:
+            log.info("DoorDash: no StoreCard found — falling back to page content search")
             content = page.content()
             time_match = re.search(r'[·•]\s*(\d+)\s*min', content)
             if time_match:
