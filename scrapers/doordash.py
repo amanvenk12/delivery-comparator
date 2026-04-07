@@ -77,10 +77,11 @@ def _scrape_with_page(page, restaurant_name, address):
 
         page.wait_for_timeout(800)
 
-        # Search for the restaurant
+        # Search for the restaurant — use fill() to clear any pre-filled
+        # address text before typing, since type() appends to existing content.
         page.click('input[placeholder="Search DoorDash"]')
         page.wait_for_timeout(400)
-        page.type('input[placeholder="Search DoorDash"]', restaurant_name, delay=50)
+        page.fill('input[placeholder="Search DoorDash"]', restaurant_name)
 
         try:
             first_result = page.wait_for_selector(
