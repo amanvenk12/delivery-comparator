@@ -2,9 +2,30 @@ import re
 import logging
 import os
 import requests
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import quote_plus
 
 log = logging.getLogger(__name__)
+
+# Assumed order subtotal used to evaluate conditional delivery fee thresholds.
+_DEFAULT_SUBTOTAL = 20.0
+
+
+def _parse_fee(text):
+    """Extract a dollar fee amount from text, evaluating order-minimum conditionals
+    against _DEFAULT_SUBTOTAL. Returns a '$X.XX delivery fee' string or None."""
+    m = re.search(r'\$([\d]+\.[\d]{2})\s*delivery\s*fee', text, re.IGNORECASE)
+    if m:
+        return f"${float(m.group(1)):.2f} delivery fee"
+
+    m = re.search(r'free delivery[^$\n]{0,40}\$(\d+(?:\.\d{1,2})?)', text, re.IGNORECASE)
+    if m:
+        threshold = float(m.group(1))
+        return "$0.00 delivery fee" if _DEFAULT_SUBTOTAL >= threshold else None
+
+    if re.search(r'free delivery|\$0 delivery', text, re.IGNORECASE):
+        return "$0.00 delivery fee"
+
+    return None
 
 _DEBUG_SCREENSHOT_PATH = "/tmp/doordash_cloud_debug.png"
 
@@ -58,16 +79,12 @@ def _scrape_via_scrapingbee(restaurant_name, address):
     if time_match:
         time_text = time_match.group(1) + " min"
 
-    fee_match = re.search(
-        r'\$0 delivery fee|free delivery|\$[\d\.]+ delivery fee',
-        html, re.IGNORECASE
-    )
-    if fee_match:
-        fee_text = fee_match.group(0)
-    else:
-        fee_match = re.search(r'"deliveryFee[^"]*"[^:]*:\s*"?([\d\.]+)"?', html)
-        if fee_match:
-            fee_text = f"${fee_match.group(1)} delivery fee"
+    fee_text = _parse_fee(html) or fee_text
+    if fee_text == "Unknown":
+        # Try JSON delivery fee field as last resort
+        m = re.search(r'"deliveryFee[^"]*"[^:]*:\s*"?([\d\.]+)"?', html)
+        if m:
+            fee_text = f"${float(m.group(1)):.2f} delivery fee"
 
     log.info("DoorDash ScrapingBee extracted — time: %r, fee: %r", time_text, fee_text)
     return {
@@ -188,24 +205,14 @@ def _scrape_with_page(page, restaurant_name, address):
             )
             if time_match:
                 time_text = time_match.group(1) + " min"
-            fee_match = re.search(
-                r'\$0 delivery fee|free delivery|\$[\d\.]+ delivery fee',
-                card_text, re.IGNORECASE
-            )
-            if fee_match:
-                fee_text = fee_match.group(0)
+            fee_text = _parse_fee(card_text) or fee_text
         else:
             log.info("DoorDash: no StoreCard found — falling back to page content search")
             content = page.content()
             time_match = re.search(r'[·•]\s*(\d+)\s*min', content)
             if time_match:
                 time_text = time_match.group(1) + " min"
-            fee_match = re.search(
-                r'\$0 delivery fee|free delivery|\$[\d\.]+ delivery fee',
-                content, re.IGNORECASE
-            )
-            if fee_match:
-                fee_text = fee_match.group(0)
+            fee_text = _parse_fee(content) or fee_text
 
         return {
             "app": "DoorDash",

@@ -1,5 +1,32 @@
 import re
 
+# Assumed order subtotal used to evaluate conditional delivery fee thresholds.
+_DEFAULT_SUBTOTAL = 20.0
+
+
+def _parse_fee(text):
+    """Extract a dollar fee amount from text, evaluating order-minimum conditionals
+    against _DEFAULT_SUBTOTAL. Returns a '$X.XX delivery fee' string or None."""
+    m = re.search(r'\$([\d]+\.[\d]{2})\s*delivery\s*fee', text, re.IGNORECASE)
+    if m:
+        return f"${float(m.group(1)):.2f} delivery fee"
+
+    m = re.search(r'delivery(?:\s+fee)?[^$\n]{0,30}\$([\d]+\.[\d]{2})'
+                  r'|\$([\d]+\.[\d]{2})[^$\n]{0,30}delivery', text, re.IGNORECASE)
+    if m:
+        amount = m.group(1) or m.group(2)
+        return f"${float(amount):.2f} delivery fee"
+
+    m = re.search(r'free delivery[^$\n]{0,40}\$(\d+(?:\.\d{1,2})?)', text, re.IGNORECASE)
+    if m:
+        threshold = float(m.group(1))
+        return "$0.00 delivery fee" if _DEFAULT_SUBTOTAL >= threshold else None
+
+    if re.search(r'free delivery|\$0\.?0*\s*delivery', text, re.IGNORECASE):
+        return "$0.00 delivery fee"
+
+    return None
+
 
 def _scrape_with_page(page, restaurant_name, address):
     """Scrape Grubhub using a pre-existing Playwright page."""
@@ -83,22 +110,7 @@ def _scrape_with_page(page, restaurant_name, address):
             page.wait_for_timeout(1500)
 
             restaurant_content = page.content()
-            fee_match = re.search(
-                r'\$0\.00 delivery fee|\$0 delivery fee|free delivery'
-                r'|\$[\d]+\.[\d]{2}\s*delivery fee|\$[\d]+\.[\d]{2}\s*Delivery Fee',
-                restaurant_content, re.IGNORECASE
-            )
-            if fee_match:
-                fee_text = fee_match.group(0)
-            else:
-                fee_match = re.search(
-                    r'delivery(?:\s+fee)?[^$\n]{0,30}\$([\d]+\.[\d]{2})'
-                    r'|\$([\d]+\.[\d]{2})[^$\n]{0,30}delivery',
-                    restaurant_content, re.IGNORECASE
-                )
-                if fee_match:
-                    amount = fee_match.group(1) or fee_match.group(2)
-                    fee_text = f"${amount} delivery fee"
+            fee_text = _parse_fee(restaurant_content) or fee_text
 
         return {
             "app": "Grubhub",
