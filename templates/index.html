@@ -359,35 +359,8 @@
     .pac-matched { color: var(--accent); }
     .pac-icon { display: none; }
 
-    /* ── restaurant chain autocomplete dropdown ─────────────────── */
-    .chain-ac-wrap { position: relative; }
-    .chain-dropdown {
-      display: none;
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0; right: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: var(--shadow);
-      z-index: 9999;
-      max-height: 220px;
-      overflow-y: auto;
-    }
-    .chain-dropdown.open { display: block; }
-    .chain-item {
-      padding: 9px 14px;
-      font-size: .9rem;
-      cursor: pointer;
-      border-top: 1px solid var(--border);
-    }
-    .chain-item:first-child { border-top: none; }
-    .chain-item:hover, .chain-item.active { background: var(--accent-lt); }
-    .chain-item mark {
-      background: none;
-      color: var(--accent);
-      font-weight: 700;
-    }
+    /* ── hide address sub-line in restaurant Places dropdown ─────── */
+    .pac-secondary-text { display: none !important; }
 
     /* ── error ──────────────────────────────────────────────────── */
     #error-msg {
@@ -418,10 +391,7 @@
   </div>
   <div class="field" id="restaurant-field" style="display:none">
     <label for="restaurant">Restaurant</label>
-    <div class="chain-ac-wrap">
-      <input id="restaurant" type="text" placeholder="e.g. Shake Shack" autocomplete="off" />
-      <div class="chain-dropdown" id="chain-dropdown"></div>
-    </div>
+    <input id="restaurant" type="text" placeholder="e.g. Shake Shack" autocomplete="off" />
   </div>
 
   <div class="section-title" style="margin-top:4px">Memberships</div>
@@ -672,94 +642,12 @@
       '</div>';
   }
 
-  // ── Chain autocomplete ────────────────────────────────────────
-  const CHAINS = [
-    "McDonald's", "Shake Shack", "Chipotle", "Subway", "Burger King",
-    "Wendy's", "Chick-fil-A", "Taco Bell", "Domino's", "Pizza Hut",
-    "Panda Express", "Five Guys", "Popeyes", "KFC", "Dunkin'",
-    "Starbucks", "Sweetgreen", "Panera Bread", "Wingstop", "Jersey Mike's",
-    "Raising Cane's", "In-N-Out Burger", "Whataburger", "Sonic Drive-In",
-    "Jack in the Box", "Del Taco", "Arby's", "Culver's", "Hardee's",
-    "Carl's Jr.", "Little Caesars", "Papa John's", "Jimmy John's",
-    "Firehouse Subs", "Which Wich", "Noodles & Company", "Zaxby's",
-    "The Halal Guys", "Falafel King", "Dig Inn", "Cava", "Tender Loving Empire",
-    "Insomnia Cookies", "Krispy Kreme", "Tim Hortons", "Einstein Bros.",
-    "Habit Burger", "Shake Shack", "BurgerFi", "Shake Smart",
-  ].filter((v, i, a) => a.indexOf(v) === i).sort();
-
-  (function initChainAC() {
-    const input    = document.getElementById('restaurant');
-    const dropdown = document.getElementById('chain-dropdown');
-    let activeIdx  = -1;
-    let items      = [];
-
-    function renderDropdown(query) {
-      const q = query.trim().toLowerCase();
-      items = q.length === 0 ? [] : CHAINS.filter(c => c.toLowerCase().includes(q));
-      dropdown.innerHTML = '';
-      activeIdx = -1;
-      if (!items.length) { dropdown.classList.remove('open'); return; }
-      items.forEach((chain, i) => {
-        const div = document.createElement('div');
-        div.className = 'chain-item';
-        // Bold the matching portion
-        const idx = chain.toLowerCase().indexOf(q);
-        div.innerHTML = chain.slice(0, idx)
-          + '<mark>' + chain.slice(idx, idx + q.length) + '</mark>'
-          + chain.slice(idx + q.length);
-        div.addEventListener('mousedown', e => {
-          e.preventDefault(); // prevent blur before click
-          selectChain(chain);
-        });
-        dropdown.appendChild(div);
-      });
-      dropdown.classList.add('open');
-    }
-
-    function selectChain(chain) {
-      input.value = chain;
-      dropdown.classList.remove('open');
-      activeIdx = -1;
-    }
-
-    function setActive(idx) {
-      const els = dropdown.querySelectorAll('.chain-item');
-      els.forEach(el => el.classList.remove('active'));
-      if (idx >= 0 && idx < els.length) {
-        els[idx].classList.add('active');
-        els[idx].scrollIntoView({ block: 'nearest' });
-      }
-      activeIdx = idx;
-    }
-
-    input.addEventListener('input', () => renderDropdown(input.value));
-    input.addEventListener('focus', () => { if (input.value.trim()) renderDropdown(input.value); });
-    input.addEventListener('blur',  () => setTimeout(() => dropdown.classList.remove('open'), 150));
-
-    input.addEventListener('keydown', e => {
-      if (!dropdown.classList.contains('open')) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActive(Math.min(activeIdx + 1, items.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActive(Math.max(activeIdx - 1, 0));
-      } else if (e.key === 'Enter' && activeIdx >= 0) {
-        e.preventDefault();
-        selectChain(items[activeIdx]);
-      } else if (e.key === 'Escape') {
-        dropdown.classList.remove('open');
-      }
-    });
-  })();
-
-  // Submit on Enter — skip if chain dropdown or Places dropdown is open.
+  // Submit on Enter — skip if Places dropdown is open.
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     if (document.getElementById('form-card').style.display === 'none') return;
-    const chainOpen = document.getElementById('chain-dropdown').classList.contains('open');
-    const pacOpen   = document.querySelector('.pac-container:not([style*="display: none"])');
-    if (!chainOpen && !pacOpen) runCompare();
+    const pacOpen = document.querySelector('.pac-container:not([style*="display: none"])');
+    if (!pacOpen) runCompare();
   });
 
   // ── Google Places Autocomplete ────────────────────────────────
@@ -767,14 +655,32 @@
   function initAutocomplete() {
     const restaurantInput = document.getElementById('restaurant');
 
-    // Address field only — no autocomplete on the restaurant field.
-    // The restaurant value is whatever the user typed verbatim.
+    // Restaurant field — establishment type, biased toward the entered address.
+    // Only the place.name is stored on selection (never the formatted address).
+    const restaurantAC = new google.maps.places.Autocomplete(
+      restaurantInput,
+      {
+        types: ['establishment'],
+        componentRestrictions: { country: 'us' },
+        fields: ['name'],
+        strictBounds: false,
+      }
+    );
+    restaurantAC.addListener('place_changed', () => {
+      const place = restaurantAC.getPlace();
+      if (place && place.name) {
+        restaurantInput.value = place.name;
+      }
+    });
+
+    // Address field — on selection, bias the restaurant AC toward that location
+    // and reveal the restaurant field.
     const addressAC = new google.maps.places.Autocomplete(
       document.getElementById('address'),
       {
         types: ['address'],
         componentRestrictions: { country: 'us' },
-        fields: ['formatted_address'],
+        fields: ['formatted_address', 'geometry'],
       }
     );
     addressAC.addListener('place_changed', () => {
@@ -782,7 +688,14 @@
       if (place.formatted_address) {
         document.getElementById('address').value = place.formatted_address;
       }
-      // Reveal the restaurant field now that we have an address.
+      if (place.geometry && place.geometry.location) {
+        restaurantAC.setBounds(
+          new google.maps.Circle({
+            center: place.geometry.location,
+            radius: 10000,
+          }).getBounds()
+        );
+      }
       document.getElementById('restaurant-field').style.display = '';
       restaurantInput.focus();
     });
