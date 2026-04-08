@@ -359,9 +359,6 @@
     .pac-matched { color: var(--accent); }
     .pac-icon { display: none; }
 
-    /* ── hide address sub-text in restaurant autocomplete ──────── */
-    body.restaurant-ac-open .pac-secondary-text { display: none; }
-
     /* ── error ──────────────────────────────────────────────────── */
     #error-msg {
       display: none;
@@ -654,54 +651,22 @@
   // ── Google Places Autocomplete ────────────────────────────────
   // Called by the Maps JS SDK once it has loaded (see script tag below).
   function initAutocomplete() {
-    // Restaurant field — establishment type, biased toward the entered address.
-    // strictBounds: false so chain names resolve even if the nearest location
-    // is slightly outside the bias area.
     const restaurantInput = document.getElementById('restaurant');
-    const restaurantAC = new google.maps.places.Autocomplete(
-      restaurantInput,
-      {
-        types: ['establishment'],
-        componentRestrictions: { country: 'us' },
-        fields: ['name'],
-        strictBounds: false,
-      }
-    );
-    restaurantAC.addListener('place_changed', () => {
-      const place = restaurantAC.getPlace();
-      // Store only the business name, not the full address string.
-      if (place.name) {
-        restaurantInput.value = place.name;
-      }
-    });
 
-    // Toggle a body class while the restaurant field is focused so we can
-    // hide the secondary address text in its pac-container via CSS.
-    restaurantInput.addEventListener('focus', () => document.body.classList.add('restaurant-ac-open'));
-    restaurantInput.addEventListener('blur',  () => document.body.classList.remove('restaurant-ac-open'));
-
-    // Address field — show restaurant field and update restaurant AC bias on selection.
+    // Address field only — no autocomplete on the restaurant field.
+    // The restaurant value is whatever the user typed verbatim.
     const addressAC = new google.maps.places.Autocomplete(
       document.getElementById('address'),
       {
         types: ['address'],
         componentRestrictions: { country: 'us' },
-        fields: ['formatted_address', 'geometry'],
+        fields: ['formatted_address'],
       }
     );
     addressAC.addListener('place_changed', () => {
       const place = addressAC.getPlace();
       if (place.formatted_address) {
         document.getElementById('address').value = place.formatted_address;
-      }
-      // Bias restaurant suggestions toward the selected address location.
-      if (place.geometry && place.geometry.location) {
-        restaurantAC.setBounds(
-          new google.maps.Circle({
-            center: place.geometry.location,
-            radius: 10000,  // 10 km
-          }).getBounds()
-        );
       }
       // Reveal the restaurant field now that we have an address.
       document.getElementById('restaurant-field').style.display = '';
