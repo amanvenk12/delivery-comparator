@@ -24,13 +24,8 @@ def _scrape_via_scrapingbee(restaurant_name, address):
         log.warning("DoorDash ScrapingBee fallback: SCRAPINGBEE_API_KEY not set")
         return {"app": "DoorDash", "available": False, "error": "Bot-blocked and no SCRAPINGBEE_API_KEY set."}
 
-    # Build the DoorDash search URL — address is passed as location param
-    search_url = (
-        "https://www.doordash.com/search/store/"
-        + quote_plus(restaurant_name)
-        + "/?query="
-        + quote_plus(restaurant_name)
-    )
+    # Build the DoorDash search URL — restaurant name only, no address
+    search_url = "https://www.doordash.com/search/store/" + quote_plus(restaurant_name) + "/"
     params = {
         "api_key": api_key,
         "url": search_url,
