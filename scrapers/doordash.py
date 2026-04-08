@@ -1,6 +1,8 @@
 import re
 import logging
 import os
+import requests
+from urllib.parse import urlencode, quote_plus
 
 log = logging.getLogger(__name__)
 
@@ -15,6 +17,73 @@ def _screenshot(page, path, label):
         log.warning("DoorDash screenshot failed (%s): %s", label, e)
 
 
+def _scrape_via_scrapingbee(restaurant_name, address):
+    """Fallback when Playwright is bot-blocked: fetch via ScrapingBee API."""
+    api_key = os.environ.get('SCRAPINGBEE_API_KEY', '')
+    if not api_key:
+        log.warning("DoorDash ScrapingBee fallback: SCRAPINGBEE_API_KEY not set")
+        return {"app": "DoorDash", "available": False, "error": "Bot-blocked and no SCRAPINGBEE_API_KEY set."}
+
+    # Build the DoorDash search URL — address is passed as location param
+    search_url = (
+        "https://www.doordash.com/search/store/"
+        + quote_plus(restaurant_name)
+        + "/?query="
+        + quote_plus(restaurant_name)
+    )
+    params = {
+        "api_key": api_key,
+        "url": search_url,
+        "render_js": "true",
+        "premium_proxy": "true",
+        "country_code": "us",
+        "wait": "3000",  # ms — let JS render store cards
+    }
+
+    log.info("DoorDash ScrapingBee fallback: fetching %s", search_url)
+    try:
+        resp = requests.get("https://app.scrapingbee.com/api/v1/", params=params, timeout=60)
+        log.info("DoorDash ScrapingBee status: %d", resp.status_code)
+        if resp.status_code != 200:
+            return {"app": "DoorDash", "available": False, "error": f"ScrapingBee returned HTTP {resp.status_code}"}
+    except requests.RequestException as e:
+        return {"app": "DoorDash", "available": False, "error": f"ScrapingBee request failed: {e}"}
+
+    html = resp.text
+    log.info("DoorDash ScrapingBee HTML preview: %r", html[:500])
+
+    time_text = "Unknown"
+    fee_text = "Unknown"
+
+    time_match = (
+        re.search(r'[·•]\s*(\d+)\s*min', html) or
+        re.search(r'"deliveryTime[^"]*"[^:]*:\s*"?(\d+)', html) or
+        re.search(r'\b(\d+)\s*min\b', html)
+    )
+    if time_match:
+        time_text = time_match.group(1) + " min"
+
+    fee_match = re.search(
+        r'\$0 delivery fee|free delivery|\$[\d\.]+ delivery fee',
+        html, re.IGNORECASE
+    )
+    if fee_match:
+        fee_text = fee_match.group(0)
+    else:
+        fee_match = re.search(r'"deliveryFee[^"]*"[^:]*:\s*"?([\d\.]+)"?', html)
+        if fee_match:
+            fee_text = f"${fee_match.group(1)} delivery fee"
+
+    log.info("DoorDash ScrapingBee extracted — time: %r, fee: %r", time_text, fee_text)
+    return {
+        "app": "DoorDash",
+        "available": True,
+        "delivery_time": time_text,
+        "delivery_fee": fee_text,
+        "via_fallback": True,
+    }
+
+
 def _scrape_with_page(page, restaurant_name, address):
     """Scrape DoorDash using a pre-existing Playwright page."""
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -25,12 +94,8 @@ def _scrape_with_page(page, restaurant_name, address):
         content = page.content()
         if 'Verify you are human' in content or 'security verification' in content.lower():
             _screenshot(page, _DEBUG_SCREENSHOT_PATH, "bot_blocked")
-            return {
-                "app": "DoorDash",
-                "available": False,
-                "bot_blocked": True,
-                "error": "DoorDash is only available when running locally.",
-            }
+            log.info("DoorDash bot-blocked — trying ScrapingBee fallback")
+            return _scrape_via_scrapingbee(restaurant_name, address)
 
         # Dismiss login/signup modal if present
         try:
